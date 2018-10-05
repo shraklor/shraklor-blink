@@ -6,8 +6,13 @@ Module to handle communication with the Blink REST API
 Coming once I finish the make file to generate using sphinx, should end up in github pages
 
 ## Work in progress, the goal is to create an API class that only holds the REST endpoints, as well as manages the identity token for me
-after that then I will create a wrapper class to handle the work load, and it will manage any business logic that is needed
-### not sure if there is such a thing as multiple regions....if there is it would just expose the regions and I would have to handle passing in region for most calls
+
+
+## TODO
+#### rate limiting - what to do if exceeded? queue calls???
+#### wrapper for the API to handle any business logic (ie. make sure network is armed before arming camera)
+#### wrap regions in case the system allows multiple regions (default to region[0] if only 1)
+#### wrapper should handle saving files (thumbnails, videos)
 
 
 ## Examples
@@ -53,7 +58,7 @@ from shraklor.blink import BlinkRestApi
 
     for network in networks:
         if not network['armed']:
-            blink.arm_network(network['id'])
+            blink.arm_network(network)
             print('armed network {}'.format(network['name']))
 
     blink = None
@@ -68,7 +73,7 @@ from shraklor.blink import BlinkRestApi
 
     for network in networks:
         if network['armed']:
-            blink.disarm_network(network['id'])
+            blink.disarm_network(network)
             print('disarmed network {}'.format(network['name']))
 
     blink = None
@@ -102,7 +107,7 @@ from shraklor.blink import BlinkRestApi, BlinkCamera
     networks = blink.get_networks()
 
     for network in networks:
-        devices = blink.get_network_devices(network['id'])  #TODO: needs to be written still
+        devices = blink.get_network_devices(network)
 
         for device in devices:
             if not isinstance(device, BlinkCamera):
@@ -112,10 +117,10 @@ from shraklor.blink import BlinkRestApi, BlinkCamera
 
             if device['name'] == 'upstairs-master':
                 if camera_config['enabled']:
-                    blink.disarm_camera(network['id'], device['device_id'])
+                    blink.disarm_camera(network, device)
             else:
                 if not camera_config['enabled']:
-                    blink.arm_camera(network['id'], device['device_id'])
+                    blink.arm_camera(network, device)
 
     blink = None
 ```
@@ -129,7 +134,7 @@ import json
     networks = blink.get_networks()
 
     for network in networks:
-        response = blink.get_network(network['id'])
+        response = blink.get_network(network)
         print(json.dumps(response, indent=4, sort_keys=True))
 
     blink = None
@@ -144,7 +149,7 @@ import json
     networks = blink.get_networks()
 
     for network in networks:
-        response = blink.get_sync_modules(network['id'])
+        response = blink.get_sync_modules(network)
         print(json.dumps(response, indent=4, sort_keys=True))
 
     blink = None
@@ -159,7 +164,7 @@ import json
     networks = blink.get_networks()
 
     for network in networks:
-        response = blink.get_events(network['id'])
+        response = blink.get_events(network)
         print(json.dumps(response, indent=4, sort_keys=True))
 
     blink = None
