@@ -8,6 +8,7 @@ Target:  python3
 import logging
 import json
 from datetime import datetime, timedelta
+import warnings
 
 from shraklor.http import Http
 
@@ -28,24 +29,7 @@ class BlinkUnknownDevice(Exception):
         super().__init__('Unknown device type {0}.{1}'.format(device, specific))
 
 
-def rate_limit_check():
-    '''
-    at some point this will turn into a decorator that will manage the rate limiting for me
-    not sure if it will just throw an exception or force a wait....???
-    '''
-    EXCEPTION_EXCEED_MSG = 'Exceeded calls to Blink REST API ({0}) of ({1}) within 60 seconds.'
-
-    def wrapper():
-
-        if 1 == 2:
-            raise BlinkRateLimitExceededException()
-
-
-
-
-
-
-class BlinkUrls():
+class BlinkUrls():  # pylint: disable=too-few-public-methods
     '''
     helper class to manage URLs
     '''
@@ -56,12 +40,15 @@ class BlinkUrls():
 
     @staticmethod
     def root_url(region):
+        '''
+        generates the root URL with the region in it
+        '''
         return '{0}://rest.{1}.{2}'.format(BlinkUrls.scheme,
-                            region,
-                            BlinkUrls.domain)
+                                           region,
+                                           BlinkUrls.domain)
 
 
-class BlinkAuthService():
+class BlinkAuthService(): #pylint: disable=too-many-instance-attributes
     '''
     manages getting the Blink auth token
     '''
@@ -104,11 +91,11 @@ class BlinkAuthService():
             data['client_specifier'] = self._client
 
             response = Http.call('POST',
-                                url=BlinkUrls.login,
-                                data=data,
-                                header=self._header,
-                                proxy=self._proxy,
-                                timeout=self._HTTP_TIMEOUT)
+                                 url=BlinkUrls.login,
+                                 data=data,
+                                 header=self._header,
+                                 proxy=self._proxy,
+                                 timeout=self._HTTP_TIMEOUT)
 
             response = response.json()
 
@@ -145,6 +132,7 @@ class BlinkData(dict):
 
     def __init__(self, *args, **kwargs):
         ''' init '''
+        dict.__init__(self)
         self.update(*args, **kwargs)
 
 
@@ -153,8 +141,7 @@ class BlinkNetwork(BlinkData):
 
     def __init__(self, *args, **kwargs):
         ''' init '''
-        #print(json.dumps(kwargs, indent=4, sort_keys=True))
-        super().__init__(*args, **kwargs)
+        BlinkData.__init__(self, *args, **kwargs)
 
 
 class BlinkCamera(BlinkData):
@@ -162,8 +149,7 @@ class BlinkCamera(BlinkData):
 
     def __init__(self, *args, **kwargs):
         ''' init '''
-        #print(json.dumps(data, indent=4, sort_keys=True))
-        super().__init__(*args, **kwargs)
+        BlinkData.__init__(self, *args, **kwargs)
 
 
 class BlinkCameraXt(BlinkCamera):
@@ -171,8 +157,7 @@ class BlinkCameraXt(BlinkCamera):
 
     def __init__(self, *args, **kwargs):
         ''' init '''
-        #print(json.dumps(data, indent=4, sort_keys=True))
-        super().__init__(*args, **kwargs)
+        BlinkCamera.__init__(self, *args, **kwargs)
 
 
 class BlinkCameraWhite(BlinkCamera):
@@ -180,8 +165,7 @@ class BlinkCameraWhite(BlinkCamera):
 
     def __init__(self, *args, **kwargs):
         ''' init '''
-        #print(json.dumps(data, indent=4, sort_keys=True))
-        super().__init__(*args, **kwargs)
+        BlinkCamera.__init__(self, *args, **kwargs)
 
 
 class BlinkSyncModule(BlinkData):
@@ -189,8 +173,7 @@ class BlinkSyncModule(BlinkData):
 
     def __init__(self, *args, **kwargs):
         ''' init '''
-        #print(json.dumps(data, indent=4, sort_keys=True))
-        super().__init__(*args, **kwargs)
+        BlinkData.__init__(self, *args, **kwargs)
 
 
 class BlinkEvent(BlinkData):
@@ -198,8 +181,7 @@ class BlinkEvent(BlinkData):
 
     def __init__(self, *args, **kwargs):
         ''' init '''
-        #print(json.dumps(data, indent=4, sort_keys=True))
-        super().__init__(*args, **kwargs)
+        BlinkData.__init__(self, *args, **kwargs)
 
 
 class BlinkVideo(BlinkData):
@@ -207,9 +189,7 @@ class BlinkVideo(BlinkData):
 
     def __init__(self, *args, **kwargs):
         ''' init '''
-        #print(json.dumps(data, indent=4, sort_keys=True))
-        super().__init__(*args, **kwargs)
-
+        BlinkData.__init__i(self, *args, **kwargs)
 
 
 
@@ -235,7 +215,7 @@ class BlinkFactory():
         '''
         if not data:
             return None
-        
+
         return BlinkData(**data['camera'][0])
 
 
@@ -385,23 +365,7 @@ class BlinkRestApi():
         self._http_rates = {'calls': [], 'max': self.MAXIMUM_CALLS_PER_MINUTE}
 
 
-    def _call(self, method, url, data=None):
-        '''
-        '''
-        header = self._get_header()
-        self.logger.debug(header)
-        self.logger.info('{0} {1}'.format(method, url))
-        response = self._http.send(method, url, data=data, header=header)
-
-        if not response:
-            raise Exception('no response from HTTP call')
-
-        response = response.json()
-
-        return response
-
-
-    def _get_header(self):
+    def _build_header(self):
         '''
         creates the HTTP header with latest token info
             from the BlinkAuthService
@@ -412,7 +376,26 @@ class BlinkRestApi():
         header.update({'HOST': '{0}.{1}'.format(self._region, BlinkUrls.domain)})
 
         return header
-    
+
+
+    def _call(self, method, url, data=None):
+        '''
+        make HTTP call using to Url, always return back the JSON
+        '''
+        header = self._build_header()
+        self.logger.debug(header)
+        self.logger.info('%s %s', method, url)
+        response = self._http.send(method, url, data=data, header=header)
+
+        if not response:
+            warnings.warn('no response from HTTP call')
+
+        if response.status_code != 200:
+            print(response)
+
+        return response.json()
+
+
     @property
     def _region(self):
         '''
@@ -497,7 +480,9 @@ class BlinkRestApi():
         '''
         comment goes here
         '''
-        url = '{0}/network/{1}/camera/{2}/config'.format(BlinkUrls.root_url(self._region), network, camera)
+        url = '{0}/network/{1}/camera/{2}/config'.format(BlinkUrls.root_url(self._region),
+                                                         network,
+                                                         camera)
         response = self._call('GET', url)
 
         return BlinkFactory.load_camera_config(response)
@@ -507,7 +492,9 @@ class BlinkRestApi():
         '''
         comment goes here
         '''
-        url = '{0}/network/{1}/camera/{2}/enable'.format(BlinkUrls.root_url(self._region), network, camera)
+        url = '{0}/network/{1}/camera/{2}/enable'.format(BlinkUrls.root_url(self._region),
+                                                         network,
+                                                         camera)
         response = self._call('POST', url)
 
         return BlinkFactory.load_data(response)
@@ -517,7 +504,9 @@ class BlinkRestApi():
         '''
         comment goes here
         '''
-        url = '{0}/network/{1}/camera/{2}/disable'.format(BlinkUrls.root_url(self._region), network, camera)
+        url = '{0}/network/{1}/camera/{2}/disable'.format(BlinkUrls.root_url(self._region),
+                                                          network,
+                                                          camera)
         response = self._call('POST', url)
 
         return BlinkFactory.load_data(response)
@@ -527,7 +516,8 @@ class BlinkRestApi():
         '''
         comment goes here
         '''
-        url = '{0}/network/{1}/arm'.format(BlinkUrls.root_url(self._region), network)
+        url = '{0}/network/{1}/arm'.format(BlinkUrls.root_url(self._region),
+                                           network)
         response = self._call('POST', url)
 
         return BlinkFactory.load_data(response)
@@ -537,15 +527,11 @@ class BlinkRestApi():
         '''
         comment goes here
         '''
-        url = '{0}/network/{1}/disarm'.format(BlinkUrls.root_url(self._region), network)
+        url = '{0}/network/{1}/disarm'.format(BlinkUrls.root_url(self._region),
+                                              network)
         response = self._call('POST', url)
 
         return BlinkFactory.load_data(response)
-
-
-
-
-
 
 
 if __name__ == '__main__':
@@ -553,41 +539,62 @@ if __name__ == '__main__':
     with open('./config.json', 'r') as f:
         config = json.load(f)
 
+    # ideally I would use the security module to encrypt
+    #   the user/password and store in config
     blink = BlinkRestApi(config['user_id'], config['password'])
-    
+
     networks = blink.get_networks()
     #print(json.dumps(networks, indent=4, sort_keys=True))
 
     devices = blink.get_devices()
     #print(json.dumps(devices, indent=4, sort_keys=True))
 
+    for device in devices:
+        print(json.dumps(device, indent=4, sort_keys=True))
+        break
 
     for network in networks:
-        #response = blink.arm_network(network['id'])
-        #print(json.dumps(response, indent=4, sort_keys=True))
+        if network['armed']:
+            #response = blink.disarm_network(network['id'])
+            #print(json.dumps(response, indent=4, sort_keys=True))
+            print('disarmed network {}'.format(network['name']))
+            pass
+        else:
+            #response = blink.arm_network(network['id'])
+            #print(json.dumps(response, indent=4, sort_keys=True))
+            print('armed network {}'.format(network['name']))
+            pass
 
-        response = blink.disarm_network(network['id'])
-        #print(json.dumps(response, indent=4, sort_keys=True))
 
         for device in devices:
             if isinstance(device, BlinkCamera):
                 camera_config = blink.get_camera_config(network['id'], device['device_id'])
-                print(json.dumps(camera_config, indent=4, sort_keys=True))
+                #print(json.dumps(camera_config, indent=4, sort_keys=True))
 
                 if camera_config['enabled']:
-                    response = blink.disarm_camera(network['id'], device['device_id'])
-                    print(json.dumps(response, indent=4, sort_keys=True))
+                    #response = blink.disarm_camera(network['id'], device['device_id'])
+                    #print(json.dumps(response, indent=4, sort_keys=True))
+                    print('disarmed camera {}'.format(device['name']))
+                    pass
+                else:
+                    #response = blink.arm_camera(network['id'], device['device_id'])
+                    #print(json.dumps(response, indent=4, sort_keys=True))
+                    print('armed camera {}'.format(device['name']))
+                    pass
+            else:
+                #print(json.dumps(device, indent=4, sort_keys=True))
+                pass
 
-                break
 
-
-        response = blink.get_network(network['id'])
+        # more details about the network
+        #response = blink.get_network(network['id'])
         #print(json.dumps(response, indent=4, sort_keys=True))
 
-        response = blink.get_sync_modules(network['id'])
+        # more details about network then the 'devices' version
+        #response = blink.get_sync_modules(network['id'])
         #print(json.dumps(response, indent=4, sort_keys=True))
 
-        response = blink.get_events(network['id'])
+        #response = blink.get_events(network['id'])
         #print(json.dumps(response, indent=4, sort_keys=True))
 
 
@@ -603,6 +610,6 @@ if __name__ == '__main__':
         count += len(videos)
         #print(json.dumps(videos, indent=4, sort_keys=True))
         page += 1
-        #print('count: {}/ page: {}'.format(count, page))
+        print('count: {}/ page: {}'.format(count, page))
 
     blink = None
