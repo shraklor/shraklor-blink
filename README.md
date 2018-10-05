@@ -193,3 +193,8 @@ import json
 
     blink = None
 ```
+
+
+### credit - they got the ball rolling
+Matt Weinecke - https://github.com/MattTW/BlinkMonitorProtocol
+Kevin Fronczak - https://github.com/fronzbot/blinkpy
